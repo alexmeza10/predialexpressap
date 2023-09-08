@@ -18,7 +18,9 @@ class Adeudo {
   String domicilio;
   String valFiscal;
   String edoEdificacion;
-  String bimestreselected;
+  String bimestredesde;
+  String opd;
+  String seguro;
 
   Adeudo({
     required this.anio,
@@ -40,7 +42,9 @@ class Adeudo {
     required this.domicilio,
     required this.valFiscal,
     required this.edoEdificacion,
-    required this.bimestreselected,
+    required this.bimestredesde,
+    required this.opd,
+    required this.seguro,
   });
 
   factory Adeudo.fromJson(Map<String, dynamic> json) {
@@ -64,7 +68,9 @@ class Adeudo {
       domicilio: json['DOMICILIO'].toString(),
       valFiscal: json['VAL_FISCAL'].toString(),
       edoEdificacion: json['EDO_EDIFICACION'].toString(),
-      bimestreselected: json['BIMESTRE_DESDE'].toString(),
+      bimestredesde: json['BIMESTRE_DESDE'].toString(),
+      opd: json['OPD'].toString(),
+      seguro: json['SEGURO'].toString(),
     );
   }
 
@@ -92,6 +98,8 @@ class Adeudo {
       'VAL_FISCAL': valFiscal,
       'EDO_EDIFICACION': edoEdificacion,
       'BIMESTRE_DESDE': '$anio-$bim',
+      'OPD': opd,
+      'SEGURO': seguro,
     };
   }
 }
