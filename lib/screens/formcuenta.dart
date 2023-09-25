@@ -17,16 +17,24 @@ Future<Cuenta> consultarCuenta(String cuentaPredial) async {
 
   if (response.statusCode == 200) {
     final jsonResponse = json.decode(response.body);
-    final intConsulta = int.tryParse(jsonResponse['idConsulta']);
 
-    if (intConsulta != null) {
-      return Cuenta(
-        idConsulta: intConsulta,
-        observaciones: jsonResponse['observaciones'],
-      );
+    if (jsonResponse.containsKey('idConsulta') &&
+        jsonResponse.containsKey('observaciones')) {
+      final intConsulta = int.tryParse(jsonResponse['idConsulta']);
+
+      if (intConsulta != null) {
+        return Cuenta(
+          idConsulta: intConsulta,
+          observaciones: jsonResponse['observaciones'],
+        );
+      } else {
+        throw Exception('El valor de "idConsulta" no es un número válido');
+      }
     } else {
-      throw Exception('El valor de "idConsulta" no es un número valido');
+      throw Exception('Respuesta del servidor con formato incorrecto');
     }
+  } else if (response.statusCode == 404) {
+    throw Exception('La cuenta predial o CURT no se encontró');
   } else {
     throw Exception('Falla al cargar los datos');
   }
@@ -91,7 +99,7 @@ class _FormCuentaState extends State<FormCuenta> {
           cuenta = await consultarCurt(curt);
         } else {
           _mostrarMensajeError('Ingresa un número de cuenta o CURT');
-          return; // Sale de la función sin continuar
+          return;
         }
 
         _logger.d('ID de consulta: ${cuenta.idConsulta}');
@@ -102,7 +110,8 @@ class _FormCuentaState extends State<FormCuenta> {
           _navegarAFormAdeudos(cuenta.idConsulta!);
         }
       } catch (e) {
-        _logger.e('Error: $e');
+        _mostrarMensajeError(
+            'Falla al cargar los datos, intente con otra cuenta o acuda a su recaudadora más cercana');
       } finally {
         setState(() {
           _isLoading = false;
@@ -113,17 +122,28 @@ class _FormCuentaState extends State<FormCuenta> {
 
   void _mostrarMensajeError(String mensaje) {
     showDialog(
-      context: context, // Usar el contexto actual
+      context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Error'),
           content: Text(mensaje),
           actions: <Widget>[
             TextButton(
-              child: const Text('Aceptar'),
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // Cierra la alerta
+                Navigator.of(dialogContext).pop();
               },
+              style: ButtonStyle(
+                backgroundColor:
+                    MaterialStateProperty.all<Color>(const Color(0xFF764E84)),
+                foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+              ),
+              child: const Text(
+                'Aceptar',
+                style: TextStyle(
+                  fontFamily: 'Isidora-regular',
+                  fontSize: 16,
+                ),
+              ),
             ),
           ],
         );
@@ -133,19 +153,30 @@ class _FormCuentaState extends State<FormCuenta> {
 
   void _mostrarAlertaObservacion(String observacion) {
     showDialog(
-      context: context, // Usar el contexto actual
+      context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Observación'),
           content: Text(observacion),
           actions: <Widget>[
             TextButton(
-              child: const Text('Aceptar'),
               onPressed: () {
                 cuentaPredialController.clear();
                 curtController.clear();
-                Navigator.of(dialogContext).pop(); // Cierra la alerta
+                Navigator.of(dialogContext).pop();
               },
+              style: ButtonStyle(
+                backgroundColor:
+                    MaterialStateProperty.all<Color>(const Color(0xFF764E84)),
+                foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+              ),
+              child: const Text(
+                'Aceptar',
+                style: TextStyle(
+                  fontFamily: 'Isidora-regular',
+                  fontSize: 16,
+                ),
+              ),
             ),
           ],
         );
@@ -158,6 +189,46 @@ class _FormCuentaState extends State<FormCuenta> {
       context,
       MaterialPageRoute(
         builder: (context) => FormAdeudos(idConsulta: idConsulta),
+      ),
+    );
+  }
+
+  final BoxDecoration inputDecoration = BoxDecoration(
+    borderRadius: BorderRadius.circular(10),
+    border: Border.all(color: Colors.black),
+  );
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String hintText,
+    required int maxLength,
+    required TextInputType keyboardType,
+    required List<TextInputFormatter> inputFormatters,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 200),
+        decoration: inputDecoration,
+        child: TextFormField(
+          controller: controller,
+          textAlign: TextAlign.center,
+          enableInteractiveSelection: false,
+          style: const TextStyle(
+            fontSize: 30,
+          ),
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: const TextStyle(
+              fontSize: 24,
+            ),
+            border: InputBorder.none,
+            counterText: '',
+          ),
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          maxLength: maxLength,
+        ),
       ),
     );
   }
@@ -182,29 +253,15 @@ class _FormCuentaState extends State<FormCuenta> {
               ),
             ),
             const SizedBox(height: 20),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 200),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.black),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-                child: TextFormField(
-                  controller: cuentaPredialController,
-                  textAlign: TextAlign.center,
-                  enableInteractiveSelection: false,
-                  decoration: const InputDecoration(
-                    hintText: "Ejemplo: 1114000000",
-                    border: InputBorder.none,
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(10),
-                    FilteringTextInputFormatter.allow(RegExp('[0-9]')),
-                  ],
-                ),
-              ),
+            _buildInputField(
+              controller: cuentaPredialController,
+              hintText: "Ejemplo: 1114000000",
+              maxLength: 10,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(10),
+                FilteringTextInputFormatter.allow(RegExp('[0-9]')),
+              ],
             ),
             const SizedBox(height: 70),
             const Text(
@@ -217,29 +274,15 @@ class _FormCuentaState extends State<FormCuenta> {
               ),
             ),
             const SizedBox(height: 20),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 200),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.black),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-                child: TextFormField(
-                  controller: curtController,
-                  textAlign: TextAlign.center,
-                  enableInteractiveSelection: false,
-                  decoration: const InputDecoration(
-                    hintText: "Clave de 31 dígitos",
-                    border: InputBorder.none,
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(31),
-                    FilteringTextInputFormatter.allow(RegExp('[0-9]')),
-                  ],
-                ),
-              ),
+            _buildInputField(
+              controller: curtController,
+              hintText: "Clave de 31 dígitos",
+              maxLength: 31,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(31),
+                FilteringTextInputFormatter.allow(RegExp('[0-9]')),
+              ],
             ),
             const SizedBox(height: 70),
             ElevatedButton(

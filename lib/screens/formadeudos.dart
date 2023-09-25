@@ -59,13 +59,12 @@ class FormAdeudos extends StatefulWidget {
 class FormAdeudosState extends State<FormAdeudos> {
   List<Adeudo> adeudos = [];
   List<bool> selectedAdeudos = [];
-  List<String> availableYears = [];
-  List<String> availableBimestres = [];
   double totalSeleccionado = 0;
   final logger = Logger();
   String? selectedYear;
   String? selectedBimestre;
   bool checkboxesEnabled = true;
+  List<String> selectedYearsAndBimestres = [];
 
   String formatCurrency(double amount) {
     final formatter = NumberFormat.currency(
@@ -99,7 +98,6 @@ class FormAdeudosState extends State<FormAdeudos> {
           if (parts.length == 2) {
             selectedYear = parts[0];
             selectedBimestre = parts[1];
-
             selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
               final adeudo = adeudos[index];
               final adeudoYear = int.parse(adeudo.anio);
@@ -113,6 +111,8 @@ class FormAdeudosState extends State<FormAdeudos> {
 
               return shouldBeSelected;
             });
+            logger.d('Selected Year: $selectedYear');
+            logger.d('Selected Bimestre: $selectedBimestre');
           }
         }
       });
@@ -150,46 +150,46 @@ class FormAdeudosState extends State<FormAdeudos> {
     return formatter.format(numericValue);
   }
 
-  void _showNoSelectionAlertDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Cuidado'),
-          content: const Text('Debe seleccionar al menos un adeudo.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Aceptar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _goToPreparaPagoScreen(BuildContext context) {
     updateTotalSeleccionado();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FormPreparaPago(
-          adeudos: adeudos,
-          idConsulta: widget.idConsulta,
-          idPredio: adeudos.isNotEmpty ? adeudos[0].idPredio : "",
-          cuenta: adeudos.isNotEmpty ? adeudos[0].cuenta : "",
-          curt: adeudos.isNotEmpty ? adeudos[0].curt : "",
-          propietario: adeudos.isNotEmpty ? adeudos[0].propietario : "",
-          domicilio: adeudos.isNotEmpty ? adeudos[0].domicilio : "",
-          valFiscal: adeudos.isNotEmpty ? adeudos[0].valFiscal : "",
-          edoEdificacion: adeudos.isNotEmpty ? adeudos[0].edoEdificacion : "",
-          bimestreselected: '${selectedYear ?? ""}-${selectedBimestre ?? ""}',
-          totalSeleccionado: totalSeleccionado,
+
+    if (selectedYear != null && selectedBimestre != null) {
+      logger.d('Información que se enviará a la siguiente vista:');
+      logger.d('adeudos: $adeudos');
+      logger.d('idConsulta: ${widget.idConsulta}');
+      logger.d('idPredio: ${adeudos.isNotEmpty ? adeudos[0].idPredio : ""}');
+      logger.d('cuenta: ${adeudos.isNotEmpty ? adeudos[0].cuenta : ""}');
+      logger.d('curt: ${adeudos.isNotEmpty ? adeudos[0].curt : ""}');
+      logger.d(
+          'propietario: ${adeudos.isNotEmpty ? adeudos[0].propietario : ""}');
+      logger.d('domicilio: ${adeudos.isNotEmpty ? adeudos[0].domicilio : ""}');
+      logger.d('valFiscal: ${adeudos.isNotEmpty ? adeudos[0].valFiscal : ""}');
+      logger.d(
+          'edoEdificacion: ${adeudos.isNotEmpty ? adeudos[0].edoEdificacion : ""}');
+      logger.d('totalSeleccionado: $totalSeleccionado');
+      logger.d('selectedYear: ${selectedYear ?? ""}');
+      logger.d('selectedBimestre: ${selectedBimestre ?? ""}');
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FormPreparaPago(
+            adeudos: adeudos,
+            idConsulta: widget.idConsulta,
+            idPredio: adeudos.isNotEmpty ? adeudos[0].idPredio : "",
+            cuenta: adeudos.isNotEmpty ? adeudos[0].cuenta : "",
+            curt: adeudos.isNotEmpty ? adeudos[0].curt : "",
+            propietario: adeudos.isNotEmpty ? adeudos[0].propietario : "",
+            domicilio: adeudos.isNotEmpty ? adeudos[0].domicilio : "",
+            valFiscal: adeudos.isNotEmpty ? adeudos[0].valFiscal : "",
+            edoEdificacion: adeudos.isNotEmpty ? adeudos[0].edoEdificacion : "",
+            totalSeleccionado: totalSeleccionado,
+            selectedYear: selectedYear ?? "",
+            selectedBimestre: selectedBimestre ?? "",
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -355,27 +355,53 @@ class FormAdeudosState extends State<FormAdeudos> {
                                 ? selectedAdeudos[index]
                                 : false,
                             onSelectChanged: (isSelected) {
-                              setState(() {
-                                final adeudo = adeudos[index];
-                                final adeudoYear = int.parse(adeudo.anio);
-                                final adeudoBimestre = int.parse(adeudo.bim);
+                              if (isSelected != null) {
+                                setState(() {
+                                  final adeudo = adeudos[index];
+                                  final adeudoYear = int.parse(adeudo.anio);
+                                  final adeudoBimestre = int.parse(adeudo.bim);
 
-                                final jsonYear = int.parse(selectedYear ?? '0');
-                                final jsonBimestre =
-                                    int.parse(selectedBimestre ?? '0');
+                                  if (selectedYear != null &&
+                                      selectedBimestre != null) {
+                                    final jsonYear = int.parse(selectedYear!);
+                                    final jsonBimestre =
+                                        int.parse(selectedBimestre!);
 
-                                final isBeforeOrEqual = adeudoYear < jsonYear ||
-                                    (adeudoYear == jsonYear &&
-                                        adeudoBimestre <= jsonBimestre);
+                                    final isBeforeOrEqual =
+                                        adeudoYear < jsonYear ||
+                                            (adeudoYear == jsonYear &&
+                                                adeudoBimestre <= jsonBimestre);
 
-                                if (isBeforeOrEqual) {
-                                  selectedAdeudos[index] = true;
-                                } else {
-                                  selectedAdeudos[index] = isSelected ?? false;
-                                }
+                                    if (isBeforeOrEqual) {
+                                      selectedAdeudos[index] = true;
+                                    } else {
+                                      selectedAdeudos[index] = isSelected;
 
-                                updateTotalSeleccionado();
-                              });
+                                      if (!isSelected) {
+                                        selectedYear = null;
+                                        selectedBimestre = null;
+                                      }
+                                    }
+
+                                    if (selectedYear != null &&
+                                        selectedBimestre != null) {
+                                      logger
+                                          .d('Año seleccionado: $selectedYear');
+                                      logger.d(
+                                          'Bimestre seleccionado: $selectedBimestre');
+                                    } else {
+                                      logger.d(
+                                          'Año y/o Bimestre no tienen información');
+                                    }
+
+                                    logger.d('Año adeudo: $adeudoYear');
+                                    logger
+                                        .d('Bimestre adeudo: $adeudoBimestre');
+
+                                    updateTotalSeleccionado();
+                                  }
+                                });
+                              }
                             },
                             cells: [
                               DataCell(Text(
@@ -511,8 +537,6 @@ class FormAdeudosState extends State<FormAdeudos> {
                         onPressed: () {
                           if (selectedAdeudos.contains(true)) {
                             _goToPreparaPagoScreen(context);
-                          } else {
-                            _showNoSelectionAlertDialog();
                           }
                         },
                         style: ElevatedButton.styleFrom(
