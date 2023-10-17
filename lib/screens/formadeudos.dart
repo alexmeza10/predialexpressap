@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 import 'package:predialexpressapp/main.dart';
 import 'package:predialexpressapp/models/adeudo.dart';
+import 'package:predialexpressapp/screens/formcuenta.dart';
 import 'dart:convert';
 
 import 'package:predialexpressapp/screens/formpreparapago.dart';
@@ -49,8 +50,10 @@ class LabeledCheckbox extends StatelessWidget {
 
 class FormAdeudos extends StatefulWidget {
   final int idConsulta;
+  final int oid;
 
-  const FormAdeudos({Key? key, required this.idConsulta}) : super(key: key);
+  const FormAdeudos({Key? key, required this.idConsulta, required this.oid})
+      : super(key: key);
 
   @override
   FormAdeudosState createState() => FormAdeudosState();
@@ -61,10 +64,17 @@ class FormAdeudosState extends State<FormAdeudos> {
   List<bool> selectedAdeudos = [];
   double totalSeleccionado = 0;
   final logger = Logger();
-  String? selectedYear;
-  String? selectedBimestre;
+  String? year;
+  String? bimestre;
+  String? originalYear;
+  String? originalBimestre;
   bool checkboxesEnabled = true;
-  List<String> selectedYearsAndBimestres = [];
+  int? firstyear;
+  int? firstbimestre;
+  int? jsonYear;
+  int? jsonBimestre;
+  int? selectedYear;
+  int? selectedBimestre;
 
   String formatCurrency(double amount) {
     final formatter = NumberFormat.currency(
@@ -79,48 +89,63 @@ class FormAdeudosState extends State<FormAdeudos> {
   void initState() {
     super.initState();
     _consultarAdeudos();
+    selectedYear = jsonYear;
+    selectedBimestre = jsonBimestre;
   }
 
-  void _consultarAdeudos() async {
-    final response = await http.post(Uri.parse(
-        'http://10.20.16.181:8000/obtener-adeudo?idConsulta=${widget.idConsulta}'));
+  Future<void> _consultarAdeudos() async {
+    try {
+      final response = await http.post(Uri.parse(
+          'http://10.20.16.181:8000/obtener-adeudo?idConsulta=${widget.idConsulta}'));
 
-    if (response.statusCode == 200) {
-      final jsonResponse = json.decode(response.body);
-      setState(() {
-        adeudos =
-            List<Adeudo>.from(jsonResponse.map((x) => Adeudo.fromJson(x)));
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        setState(() {
+          adeudos =
+              List<Adeudo>.from(jsonResponse.map((x) => Adeudo.fromJson(x)));
 
-        if (adeudos.isNotEmpty) {
-          final bimestreDesde = jsonResponse[0]['BIMESTRE_DESDE'] as String;
-          final parts = bimestreDesde.split('-');
+          if (adeudos.isNotEmpty) {
+            final bimestreDesde = jsonResponse[0]['BIMESTRE_DESDE'] as String;
+            final parts = bimestreDesde.split('-');
 
-          if (parts.length == 2) {
-            selectedYear = parts[0];
-            selectedBimestre = parts[1];
-            selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
-              final adeudo = adeudos[index];
-              final adeudoYear = int.parse(adeudo.anio);
-              final adeudoBimestre = int.parse(adeudo.bim);
+            if (parts.length == 2) {
+              year = parts[0];
+              bimestre = parts[1];
 
-              final shouldBeSelected = adeudoYear < int.parse(selectedYear!) ||
-                  (adeudoYear == int.parse(selectedYear!) &&
-                      adeudoBimestre <= int.parse(selectedBimestre!));
+              originalYear = year;
+              originalBimestre = bimestre;
 
-              checkboxesEnabled = !shouldBeSelected;
+              logger.d('Valor de year: $year');
+              logger.d('Valor de bimestre: $bimestre');
+              selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
+                final adeudo = adeudos[index];
+                final shouldBeSelected = selectedYear != null &&
+                    selectedBimestre != null &&
+                    selectedYear! == int.parse(adeudo.anio) &&
+                    selectedBimestre! == int.parse(adeudo.bim);
 
-              return shouldBeSelected;
-            });
-            logger.d('Selected Year: $selectedYear');
-            logger.d('Selected Bimestre: $selectedBimestre');
+                checkboxesEnabled = shouldBeSelected;
+
+                return shouldBeSelected;
+              });
+              logger.d(
+                  'selectedAdeudos (en _consultarAdeudos): $selectedAdeudos');
+            }
           }
+        });
+
+        if (firstyear == null && firstbimestre == null && adeudos.isNotEmpty) {
+          firstyear = int.parse(adeudos[0].anio);
+          firstbimestre = int.parse(adeudos[0].bim);
         }
-      });
+      }
+      _updateTotalSeleccionado();
+    } catch (e) {
+      // Manejar errores de red o de la petición HTTP aquí.
     }
-    updateTotalSeleccionado();
   }
 
-  void updateTotalSeleccionado() {
+  void _updateTotalSeleccionado() {
     final List<Adeudo> selectedAdeudosData = adeudos.where((adeudo) {
       final int index = adeudos.indexOf(adeudo);
       return selectedAdeudos.isNotEmpty &&
@@ -131,8 +156,12 @@ class FormAdeudosState extends State<FormAdeudos> {
     if (selectedAdeudosData.isNotEmpty) {
       final Adeudo lastSelectedAdeudo = selectedAdeudosData.last;
       totalSeleccionado = double.parse(lastSelectedAdeudo.acumulado);
+      selectedYear = int.parse(lastSelectedAdeudo.anio);
+      selectedBimestre = int.parse(lastSelectedAdeudo.bim);
     } else {
       totalSeleccionado = 0;
+      selectedYear = jsonYear;
+      selectedBimestre = jsonBimestre;
     }
   }
 
@@ -151,43 +180,137 @@ class FormAdeudosState extends State<FormAdeudos> {
   }
 
   void _goToPreparaPagoScreen(BuildContext context) {
-    updateTotalSeleccionado();
+    _updateTotalSeleccionado();
+    logger.d('selectedYear (antes de la navegación): $selectedYear');
+    logger.d('selectedBimestre (antes de la navegación): $selectedBimestre');
+    logger.d('totalSeleccionado (antes de la navegación): $totalSeleccionado');
 
     if (selectedYear != null && selectedBimestre != null) {
-      logger.d('Información que se enviará a la siguiente vista:');
-      logger.d('adeudos: $adeudos');
-      logger.d('idConsulta: ${widget.idConsulta}');
-      logger.d('idPredio: ${adeudos.isNotEmpty ? adeudos[0].idPredio : ""}');
-      logger.d('cuenta: ${adeudos.isNotEmpty ? adeudos[0].cuenta : ""}');
-      logger.d('curt: ${adeudos.isNotEmpty ? adeudos[0].curt : ""}');
-      logger.d(
-          'propietario: ${adeudos.isNotEmpty ? adeudos[0].propietario : ""}');
-      logger.d('domicilio: ${adeudos.isNotEmpty ? adeudos[0].domicilio : ""}');
-      logger.d('valFiscal: ${adeudos.isNotEmpty ? adeudos[0].valFiscal : ""}');
-      logger.d(
-          'edoEdificacion: ${adeudos.isNotEmpty ? adeudos[0].edoEdificacion : ""}');
-      logger.d('totalSeleccionado: $totalSeleccionado');
-      logger.d('selectedYear: ${selectedYear ?? ""}');
-      logger.d('selectedBimestre: ${selectedBimestre ?? ""}');
+      final int yearInt = originalYear != null ? int.parse(originalYear!) : 0;
+      final int bimestreInt =
+          originalBimestre != null ? int.parse(originalBimestre!) : 0;
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FormPreparaPago(
-            adeudos: adeudos,
-            idConsulta: widget.idConsulta,
-            idPredio: adeudos.isNotEmpty ? adeudos[0].idPredio : "",
-            cuenta: adeudos.isNotEmpty ? adeudos[0].cuenta : "",
-            curt: adeudos.isNotEmpty ? adeudos[0].curt : "",
-            propietario: adeudos.isNotEmpty ? adeudos[0].propietario : "",
-            domicilio: adeudos.isNotEmpty ? adeudos[0].domicilio : "",
-            valFiscal: adeudos.isNotEmpty ? adeudos[0].valFiscal : "",
-            edoEdificacion: adeudos.isNotEmpty ? adeudos[0].edoEdificacion : "",
-            totalSeleccionado: totalSeleccionado,
-            selectedYear: selectedYear ?? "",
-            selectedBimestre: selectedBimestre ?? "",
-          ),
-        ),
+      if (selectedYear! >= yearInt &&
+          (selectedYear! > yearInt || selectedBimestre! >= bimestreInt)) {
+        if (selectedYear! < yearInt ||
+            (selectedYear! == yearInt && selectedBimestre! < bimestreInt)) {
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text("Selección no válida"),
+                content: const Text(
+                    "No puedes seleccionar un adeudo menor que el año y bimestre actual."),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: MaterialStateProperty.all<Color>(
+                          const Color(0xFF764E84)),
+                      foregroundColor:
+                          MaterialStateProperty.all<Color>(Colors.white),
+                    ),
+                    child: const Text(
+                      'Aceptar',
+                      style: TextStyle(
+                        fontFamily: 'Isidora-regular',
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FormPreparaPago(
+                adeudos: adeudos,
+                idConsulta: widget.idConsulta,
+                idPredio: adeudos.isNotEmpty ? adeudos[0].idPredio : "",
+                cuenta: adeudos.isNotEmpty ? adeudos[0].cuenta : "",
+                curt: adeudos.isNotEmpty ? adeudos[0].curt : "",
+                propietario: adeudos.isNotEmpty ? adeudos[0].propietario : "",
+                domicilio: adeudos.isNotEmpty ? adeudos[0].domicilio : "",
+                valFiscal: adeudos.isNotEmpty ? adeudos[0].valFiscal : "",
+                edoEdificacion:
+                    adeudos.isNotEmpty ? adeudos[0].edoEdificacion : "",
+                totalSeleccionado: totalSeleccionado,
+                selectedYear: selectedYear ?? 0,
+                selectedBimestre: selectedBimestre ?? 0,
+                firstyear: firstyear,
+                firstbimestre: firstbimestre,
+                oid: widget.oid,
+              ),
+            ),
+          );
+        }
+      } else {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text("Selección no válida"),
+              content: const Text(
+                  "No puedes seleccionar un adeudo menor que el año y bimestre actual."),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  style: ButtonStyle(
+                    backgroundColor: MaterialStateProperty.all<Color>(
+                        const Color(0xFF764E84)),
+                    foregroundColor:
+                        MaterialStateProperty.all<Color>(Colors.white),
+                  ),
+                  child: const Text(
+                    'Aceptar',
+                    style: TextStyle(
+                      fontFamily: 'Isidora-regular',
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } else {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Error"),
+            content:
+                const Text("Por favor, selecciona un año y bimestre válido."),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                style: ButtonStyle(
+                  backgroundColor:
+                      MaterialStateProperty.all<Color>(const Color(0xFF764E84)),
+                  foregroundColor:
+                      MaterialStateProperty.all<Color>(Colors.white),
+                ),
+                child: const Text(
+                  'Aceptar',
+                  style: TextStyle(
+                    fontFamily: 'Isidora-regular',
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       );
     }
   }
@@ -220,9 +343,6 @@ class FormAdeudosState extends State<FormAdeudos> {
                       spacing: 20,
                       runSpacing: 10,
                       children: [
-                        _buildInfoColumn('Propietario',
-                            adeudos.isNotEmpty ? adeudos[0].propietario : "",
-                            isTitle: true),
                         _buildInfoColumn('Domicilio',
                             adeudos.isNotEmpty ? adeudos[0].domicilio : "",
                             isTitle: true),
@@ -349,57 +469,24 @@ class FormAdeudosState extends State<FormAdeudos> {
                         adeudos.length,
                         (index) {
                           final adeudo = adeudos[index];
+
+                          final jsonYear = int.parse(year!);
+                          final jsonBimestre = int.parse(bimestre!);
+
                           return DataRow(
-                            selected: selectedAdeudos.isNotEmpty &&
-                                    selectedAdeudos.length > index
-                                ? selectedAdeudos[index]
-                                : false,
+                            selected: selectedAdeudos[index],
                             onSelectChanged: (isSelected) {
-                              if (isSelected != null) {
+                              final newSelectedYear = int.parse(adeudo.anio);
+                              final newSelectedBimestre = int.parse(adeudo.bim);
+
+                              if (isSelected != null &&
+                                  (newSelectedYear >= jsonYear &&
+                                      (newSelectedYear > jsonYear ||
+                                          newSelectedBimestre >=
+                                              jsonBimestre))) {
                                 setState(() {
-                                  final adeudo = adeudos[index];
-                                  final adeudoYear = int.parse(adeudo.anio);
-                                  final adeudoBimestre = int.parse(adeudo.bim);
-
-                                  if (selectedYear != null &&
-                                      selectedBimestre != null) {
-                                    final jsonYear = int.parse(selectedYear!);
-                                    final jsonBimestre =
-                                        int.parse(selectedBimestre!);
-
-                                    final isBeforeOrEqual =
-                                        adeudoYear < jsonYear ||
-                                            (adeudoYear == jsonYear &&
-                                                adeudoBimestre <= jsonBimestre);
-
-                                    if (isBeforeOrEqual) {
-                                      selectedAdeudos[index] = true;
-                                    } else {
-                                      selectedAdeudos[index] = isSelected;
-
-                                      if (!isSelected) {
-                                        selectedYear = null;
-                                        selectedBimestre = null;
-                                      }
-                                    }
-
-                                    if (selectedYear != null &&
-                                        selectedBimestre != null) {
-                                      logger
-                                          .d('Año seleccionado: $selectedYear');
-                                      logger.d(
-                                          'Bimestre seleccionado: $selectedBimestre');
-                                    } else {
-                                      logger.d(
-                                          'Año y/o Bimestre no tienen información');
-                                    }
-
-                                    logger.d('Año adeudo: $adeudoYear');
-                                    logger
-                                        .d('Bimestre adeudo: $adeudoBimestre');
-
-                                    updateTotalSeleccionado();
-                                  }
+                                  selectedAdeudos[index] = isSelected;
+                                  _updateTotalSeleccionado();
                                 });
                               }
                             },
@@ -507,53 +594,23 @@ class FormAdeudosState extends State<FormAdeudos> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const MyApp(),
+                      _buildButton('Volver', () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FormCuenta(
+                              oid: widget.oid,
                             ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 100, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
                           ),
-                          textStyle: const TextStyle(
-                            fontSize: 24,
-                            fontFamily: 'Isidora-regular',
-                          ),
-                        ),
-                        child: const Text('Volver'),
-                      ),
+                        );
+                      }),
                       const SizedBox(width: 200),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (selectedAdeudos.contains(true)) {
-                            _goToPreparaPagoScreen(context);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF764E84),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 100, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 24,
-                            fontFamily: 'Isidora-regular',
-                          ),
-                        ),
-                        child: const Text('Continuar'),
-                      ),
+                      _buildButton('Continuar', () {
+                        if (selectedAdeudos.contains(true)) {
+                          _goToPreparaPagoScreen(context);
+                        }
+                      }),
                     ],
                   ),
                 ],
@@ -564,6 +621,25 @@ class FormAdeudosState extends State<FormAdeudos> {
       ),
     );
   }
+}
+
+Widget _buildButton(String label, void Function()? onPressed) {
+  return ElevatedButton(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF764E84),
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      textStyle: const TextStyle(
+        fontSize: 24,
+        fontFamily: 'Isidora-regular',
+      ),
+    ),
+    child: Text(label),
+  );
 }
 
 Widget _buildInfoColumn(String title, String? value, {bool isTitle = false}) {

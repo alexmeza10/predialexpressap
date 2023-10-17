@@ -3,13 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:predialexpressapp/main.dart';
-import 'dart:convert';
-import 'dart:async';
-
 import 'package:predialexpressapp/models/consultacuenta.dart';
 import 'package:predialexpressapp/screens/formadeudos.dart';
-
-final Logger _logger = Logger();
+import 'dart:convert';
+import 'dart:async';
 
 Future<Cuenta> consultarCuenta(String cuentaPredial) async {
   final url = Uri.parse('http://10.20.16.181:8000/consulta-cuenta');
@@ -62,7 +59,9 @@ Future<Cuenta> consultarCurt(String curt) async {
 }
 
 class FormCuenta extends StatefulWidget {
-  const FormCuenta({Key? key}) : super(key: key);
+  final int oid;
+
+  const FormCuenta({Key? key, required this.oid}) : super(key: key);
 
   @override
   State<FormCuenta> createState() => _FormCuentaState();
@@ -72,6 +71,7 @@ class _FormCuentaState extends State<FormCuenta> {
   final _formKey = GlobalKey<FormState>();
   final cuentaPredialController = TextEditingController();
   final curtController = TextEditingController();
+  final logger = Logger();
   bool _isLoading = false;
 
   @override
@@ -102,12 +102,12 @@ class _FormCuentaState extends State<FormCuenta> {
           return;
         }
 
-        _logger.d('ID de consulta: ${cuenta.idConsulta}');
+        logger.d('ID de consulta: ${cuenta.idConsulta}');
 
         if (cuenta.observaciones != null) {
           _mostrarAlertaObservacion(cuenta.observaciones!);
         } else if (cuenta.idConsulta != null && mounted) {
-          _navegarAFormAdeudos(cuenta.idConsulta!);
+          _navegarAFormAdeudos(cuenta.idConsulta!, widget.oid);
         }
       } catch (e) {
         _mostrarMensajeError(
@@ -174,7 +174,7 @@ class _FormCuentaState extends State<FormCuenta> {
                 'Aceptar',
                 style: TextStyle(
                   fontFamily: 'Isidora-regular',
-                  fontSize: 16,
+                  fontSize: 20,
                 ),
               ),
             ),
@@ -184,11 +184,15 @@ class _FormCuentaState extends State<FormCuenta> {
     );
   }
 
-  void _navegarAFormAdeudos(int idConsulta) {
+  void _navegarAFormAdeudos(int idConsulta, int oid) {
+    logger.d('Valor de oid: $oid');
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FormAdeudos(idConsulta: idConsulta),
+        builder: (context) => FormAdeudos(
+          idConsulta: idConsulta,
+          oid: widget.oid,
+        ),
       ),
     );
   }
@@ -235,8 +239,9 @@ class _FormCuentaState extends State<FormCuenta> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Form(
+    return Scaffold(
+      body: SingleChildScrollView(
+          child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.max,
@@ -306,7 +311,7 @@ class _FormCuentaState extends State<FormCuenta> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

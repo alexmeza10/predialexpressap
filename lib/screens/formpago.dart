@@ -1,15 +1,18 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
+import 'package:printing/printing.dart';
 
 class FormPago extends StatefulWidget {
   final String stdoutOutput;
   final int? idConsulta;
-  final String selectedYear;
-  final String selectedBimestre;
+  final int selectedYear;
+  final int selectedBimestre;
+  final int oid;
 
   const FormPago({
     Key? key,
@@ -17,6 +20,7 @@ class FormPago extends StatefulWidget {
     this.idConsulta,
     required this.selectedYear,
     required this.selectedBimestre,
+    required this.oid,
   }) : super(key: key);
 
   @override
@@ -30,17 +34,20 @@ class FormPagoState extends State<FormPago> {
   String fechaTransaccionFormatted = '';
   String montoFormatted = '';
   String referenciaRaw = '';
-  int tipoDePago = 18;
-  int cajero = 1952;
+  int tipoDePago = 4;
   String numeroTarjeta = '';
   final int idPago = 21;
+  int? oid;
   String emisorRaw = '';
   String? reciboId;
-  String? reciboBase64;
+  String? reciboResponse;
+  Uint8List? pdfBytes;
 
   @override
   void initState() {
     super.initState();
+    oid = widget.oid;
+    logger.i('Iniciando initState');
     obtenerDatosDesdeOutput(widget.stdoutOutput);
     realizarPago();
   }
@@ -50,6 +57,8 @@ class FormPagoState extends State<FormPago> {
       final List<String> dataParts = stdoutOutput.split('|');
       final Map<String, String> dataMap = {};
 
+      logger.d('Valor de tipoDePago: $tipoDePago');
+
       for (final part in dataParts) {
         final keyValue = part.split('=');
         if (keyValue.length == 2) {
@@ -57,7 +66,7 @@ class FormPagoState extends State<FormPago> {
         }
       }
 
-      emisorRaw = dataMap['emisor']?.split('/').first ?? '';
+      emisorRaw = dataMap['emisor']?.split('/').last ?? '';
       final String fechaTransaccionRaw = dataMap['fechaTransaccion'] ?? '';
       final String horaTransaccionRaw = dataMap['horaTransaccion'] ?? '';
       final double montoRaw =
@@ -65,27 +74,22 @@ class FormPagoState extends State<FormPago> {
       referenciaRaw = dataMap['referencia'] ?? '';
       numeroTarjeta = dataMap['tarjeta'] ?? '';
 
-
       if (fechaTransaccionRaw.isNotEmpty && horaTransaccionRaw.isNotEmpty) {
         final String horaTransaccion = horaTransaccionRaw;
         fechaTransaccionFormatted =
             formatFecha(fechaTransaccionRaw, horaTransaccion) ??
                 'No se pudo formatear la fecha';
       } else {
-        logger.e(
-            'Los valores de fechaTransaccionRaw y/o horaTransaccionRaw son inválidos.');
         fechaTransaccionFormatted = 'No se pudo formatear la fecha';
       }
 
       montoFormatted = montoRaw.toStringAsFixed(2);
 
-      if (emisorRaw.toLowerCase().contains('debito')) {
+      if (emisorRaw.toLowerCase().contains('DEBITO')) {
         tipoDePago = 18;
       } else {
         tipoDePago = 4;
       }
-
-     
     } catch (e) {
       logger.e('Error al analizar los datos desde stdoutOutput: $e');
       setState(() {
@@ -153,22 +157,23 @@ class FormPagoState extends State<FormPago> {
 
   Future<void> realizarPago() async {
     try {
+      logger.i('Iniciando realizarPago');
       final String vacceso = calcularFirmaHMAC(
         idPago.toString(),
         widget.idConsulta.toString(),
-        widget.selectedYear,
-        widget.selectedBimestre,
+        widget.selectedYear.toString(),
+        widget.selectedBimestre.toString(),
         montoFormatted,
         referenciaRaw,
         numeroTarjeta.toString(),
       );
 
       final Map<String, dynamic> requestData = {
-        "id": idPago.toString(),
+        "id": idPago,
         "Consulta": widget.idConsulta.toString(),
-        "Anio": int.parse(widget.selectedYear),
-        "Bim": int.parse(widget.selectedBimestre),
-        "cajero": cajero,
+        "Anio": widget.selectedYear,
+        "Bim": widget.selectedBimestre,
+        "Cajero": oid,
         "Bancoemisor": emisorRaw,
         "Fecha": fechaTransaccionFormatted,
         "Importe": montoFormatted,
@@ -180,6 +185,8 @@ class FormPagoState extends State<FormPago> {
 
       final String requestBody = jsonEncode(requestData);
 
+      logger.i('Datos enviados en la solicitud: $requestData');
+
       const String apiUrl =
           'https://pagos.zapopan.gob.mx/wsPagoExterno/Adeudo/Pagar';
 
@@ -190,6 +197,8 @@ class FormPagoState extends State<FormPago> {
         },
         body: requestBody,
       );
+
+      logger.i('Respuesta recibida en la solicitud: ${response.body}');
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
@@ -209,7 +218,15 @@ class FormPagoState extends State<FormPago> {
             logger.i('Pago exitoso');
             logger.i('reciboId: $reciboId');
 
-            await obtenerRecibo(reciboId);
+            final pdfBytesDelRecibo = await obtenerRecibo(reciboId);
+
+            if (pdfBytesDelRecibo != null) {
+              await Printing.sharePdf(
+                bytes: pdfBytesDelRecibo,
+                filename: 'recibo.pdf',
+              );
+              logger.i('Documento enviado a imprimir.');
+            } else {}
           } else {
             setState(() {
               resultMessage = 'Error en el pago: $detalleRespuesta';
@@ -238,21 +255,29 @@ class FormPagoState extends State<FormPago> {
     }
   }
 
-  Future<String?> obtenerRecibo(String? reciboId) async {
+  Future<Uint8List?> obtenerRecibo(String? reciboId) async {
     if (reciboId == null) {
-      logger.e('El reciboId es nulo, no se puede obtener el recibo.');
       return null;
     }
 
-    final List<Map<String, dynamic>> reciboRequestList = [
-      {"reciboID": reciboId}
-    ];
-
-    final String reciboRequestBody = jsonEncode(reciboRequestList);
-    const String reciboApiUrl =
-        'https://indicadores.zapopan.gob.mx:8080/WSCajaWebPruebas/api/reciboPredialWeb';
-
     try {
+      // Realiza la solicitud al servidor y obtiene la respuesta en base64
+      final List<Map<String, dynamic>> reciboRequestList = [
+        {"reciboID": reciboId}
+      ];
+
+      // Convierte la lista en una cadena JSON
+      final String reciboRequestBody = jsonEncode(reciboRequestList);
+      const String reciboApiUrl =
+          'https://indicadores.zapopan.gob.mx:8080/WSCajaWebPruebas/api/reciboPredialPruebas';
+
+      // Registra un mensaje informativo con el ID del recibo
+      logger.i('Iniciando solicitud de recibo con ID: $reciboId');
+
+      // Registra cómo se envían los datos al servidor
+      logger.d('Enviando solicitud al servidor: $reciboRequestBody');
+
+      // Realiza la solicitud POST al servidor
       final reciboResponse = await http.post(
         Uri.parse(reciboApiUrl),
         headers: {
@@ -261,24 +286,42 @@ class FormPagoState extends State<FormPago> {
         body: reciboRequestBody,
       );
 
-      if (reciboResponse.statusCode == 200) {
-        final responseData = jsonDecode(reciboResponse.body);
+      // Registra la respuesta recibida del servidor
+      logger.d(
+          'Respuesta recibida en la solicitud de recibo: ${reciboResponse.body}');
 
-        if (responseData.containsKey('base64')) {
-          final String base64Data = responseData['base64'];
-          return base64Data;
-        } else {
-          logger.e('La respuesta no contiene base64.');
-        }
+      if (reciboResponse.statusCode == 200) {
+        // Decodifica la respuesta en base64 en un Uint8List
+        final Uint8List pdfBytesDelRecibo = base64Decode(reciboResponse.body);
+
+        // Registra cómo se recibe y decodifica la respuesta
+        logger.d('Respuesta decodificada: $pdfBytesDelRecibo');
+
+        // Retorna el PDF decodificado
+        return pdfBytesDelRecibo;
       } else {
+        // Registra un mensaje de error en caso de error HTTP
         logger.e(
-            'Error en la solicitud HTTP de recibo: ${reciboResponse.statusCode}, ${reciboResponse.reasonPhrase}');
+            'Error HTTP: ${reciboResponse.statusCode}, ${reciboResponse.reasonPhrase}');
+        return null; // Devuelve nulo en caso de error HTTP
       }
     } catch (error) {
-      logger.e('Error en la solicitud de recibo: $error');
+      // Registra un mensaje de error en caso de excepción
+      logger.e('Error en la solicitud: $error');
+      return null; // Devuelve nulo en caso de error
     }
+  }
 
-    return null;
+  Future<void> imprimirRecibo(Uint8List? pdfBytes) async {
+    if (pdfBytes != null) {
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'recibo.pdf',
+      );
+      logger.i('Documento enviado a imprimir.');
+    } else {
+      logger.e('No se ha generado un recibo para imprimir.');
+    }
   }
 
   @override
