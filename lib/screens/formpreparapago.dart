@@ -57,6 +57,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
   double totalWithOPD = 0.0;
   double totalAPagar = 0.0;
   String? stdoutOutput;
+  int tieneSeguro = 0;
+  int tieneOPD = 0;
   bool isLoading = false;
   bool isPaymentOptionSelected = false;
   late double roundedTotal;
@@ -259,6 +261,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
             selectedBimestre: widget.selectedBimestre,
             idConsulta: widget.idConsulta,
             oid: widget.oid,
+            tieneSeguro: tieneSeguro,
+            tieneOPD: tieneOPD,
           ),
         ),
       );
@@ -377,6 +381,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                                   (double.parse(widget
                                                           .adeudos[0].opd) +
                                                       roundedTotal);
+                                              tieneSeguro = 1;
+                                              tieneOPD = 1;
                                             });
                                             logger.d(
                                                 'Total a pagar (Opción 5): $totalAPagar');
@@ -440,6 +446,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                               totalAPagar = double.parse(widget
                                                       .adeudos[0].seguro) +
                                                   roundedTotal;
+                                              tieneSeguro = 1;
+                                              tieneOPD = 0;
                                             });
                                             logger.d(
                                                 'Total a pagar (Opción 6): $totalAPagar');
@@ -494,7 +502,7 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 40),
+                                  const SizedBox(height: 20),
                                   Row(
                                     children: [
                                       Radio<int>(
@@ -508,6 +516,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                             totalAPagar = double.parse(
                                                     widget.adeudos[0].opd) +
                                                 roundedTotal;
+                                            tieneOPD = 1;
+                                            tieneSeguro = 0;
                                           });
                                           logger.d(
                                               'Total a pagar (Opción 3): $totalAPagar');
@@ -550,6 +560,8 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                           setState(() {
                                             selectedPaymentOption = value!;
                                             totalAPagar = roundedTotal;
+                                            tieneSeguro = 0;
+                                            tieneOPD = 0;
                                           });
                                           logger.d(
                                               'Total a pagar (Opción 4): $totalAPagar');

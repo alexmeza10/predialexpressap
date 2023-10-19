@@ -114,22 +114,38 @@ class FormAdeudosState extends State<FormAdeudos> {
 
               originalYear = year;
               originalBimestre = bimestre;
-
               logger.d('Valor de year: $year');
               logger.d('Valor de bimestre: $bimestre');
-              selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
-                final adeudo = adeudos[index];
-                final shouldBeSelected = selectedYear != null &&
-                    selectedBimestre != null &&
-                    selectedYear! == int.parse(adeudo.anio) &&
-                    selectedBimestre! == int.parse(adeudo.bim);
 
-                checkboxesEnabled = shouldBeSelected;
+              // Verifica si los valores de year y bimestre son válidos
+              if (year != null && bimestre != null) {
+                jsonYear = int.parse(year!);
+                jsonBimestre = int.parse(bimestre!);
 
-                return shouldBeSelected;
-              });
-              logger.d(
-                  'selectedAdeudos (en _consultarAdeudos): $selectedAdeudos');
+                // Establece las casillas seleccionadas automáticamente
+                selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
+                  final adeudo = adeudos[index];
+                  final adeudoYear = int.parse(adeudo.anio);
+                  final adeudoBimestre = int.parse(adeudo.bim);
+
+                  // Verifica si el adeudo es anterior o igual a jsonYear y jsonBimestre
+                  final shouldBeSelected = adeudoYear < jsonYear! ||
+                      (adeudoYear == jsonYear &&
+                          adeudoBimestre <= jsonBimestre!);
+
+                  // Establece que el adeudo debe estar seleccionado
+                  if (shouldBeSelected) {
+                    return true;
+                  } else {
+                    // Verifica si el adeudo es igual a jsonYear y jsonBimestre, si lo es, bloquea la selección
+                    return adeudoYear == jsonYear &&
+                        adeudoBimestre == jsonBimestre;
+                  }
+                });
+
+                logger.d(
+                    'selectedAdeudos (en _consultarAdeudos): $selectedAdeudos');
+              }
             }
           }
         });
@@ -138,8 +154,9 @@ class FormAdeudosState extends State<FormAdeudos> {
           firstyear = int.parse(adeudos[0].anio);
           firstbimestre = int.parse(adeudos[0].bim);
         }
+
+        _updateTotalSeleccionado();
       }
-      _updateTotalSeleccionado();
     } catch (e) {
       // Manejar errores de red o de la petición HTTP aquí.
     }
@@ -479,15 +496,22 @@ class FormAdeudosState extends State<FormAdeudos> {
                               final newSelectedYear = int.parse(adeudo.anio);
                               final newSelectedBimestre = int.parse(adeudo.bim);
 
-                              if (isSelected != null &&
-                                  (newSelectedYear >= jsonYear &&
-                                      (newSelectedYear > jsonYear ||
-                                          newSelectedBimestre >=
-                                              jsonBimestre))) {
-                                setState(() {
-                                  selectedAdeudos[index] = isSelected;
-                                  _updateTotalSeleccionado();
-                                });
+                              if (isSelected != null) {
+                                if (newSelectedYear < jsonYear ||
+                                    (newSelectedYear == jsonYear &&
+                                        newSelectedBimestre <= jsonBimestre)) {
+                                  // Impide que los adeudos con el mismo año y bimestre se desmarquen
+                                  setState(() {
+                                    selectedAdeudos[index] = true;
+                                    _updateTotalSeleccionado();
+                                  });
+                                } else {
+                                  // Permite seleccionar otros adeudos
+                                  setState(() {
+                                    selectedAdeudos[index] = isSelected;
+                                    _updateTotalSeleccionado();
+                                  });
+                                }
                               }
                             },
                             cells: [
@@ -594,23 +618,55 @@ class FormAdeudosState extends State<FormAdeudos> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildButton('Volver', () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => FormCuenta(
-                              oid: widget.oid,
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FormCuenta(
+                                oid: widget.oid,
+                              ),
                             ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 100, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        );
-                      }),
+                          textStyle: const TextStyle(
+                            fontSize: 24,
+                            fontFamily: 'Isidora-regular',
+                          ),
+                        ),
+                        child: const Text('Volver'),
+                      ),
                       const SizedBox(width: 200),
-                      _buildButton('Continuar', () {
-                        if (selectedAdeudos.contains(true)) {
-                          _goToPreparaPagoScreen(context);
-                        }
-                      }),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (selectedAdeudos.contains(true)) {
+                            _goToPreparaPagoScreen(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF764E84),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 100, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 24,
+                            fontFamily: 'Isidora-regular',
+                          ),
+                        ),
+                        child: const Text('Continuar'),
+                      ),
                     ],
                   ),
                 ],
@@ -621,25 +677,6 @@ class FormAdeudosState extends State<FormAdeudos> {
       ),
     );
   }
-}
-
-Widget _buildButton(String label, void Function()? onPressed) {
-  return ElevatedButton(
-    onPressed: onPressed,
-    style: ElevatedButton.styleFrom(
-      backgroundColor: const Color(0xFF764E84),
-      foregroundColor: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
-      textStyle: const TextStyle(
-        fontSize: 24,
-        fontFamily: 'Isidora-regular',
-      ),
-    ),
-    child: Text(label),
-  );
 }
 
 Widget _buildInfoColumn(String title, String? value, {bool isTitle = false}) {

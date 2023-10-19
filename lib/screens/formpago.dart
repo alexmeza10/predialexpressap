@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -5,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
-import 'package:printing/printing.dart';
+import 'package:predialexpressapp/screens/formrecibo.dart';
 
 class FormPago extends StatefulWidget {
   final String stdoutOutput;
@@ -13,6 +14,8 @@ class FormPago extends StatefulWidget {
   final int selectedYear;
   final int selectedBimestre;
   final int oid;
+  final int tieneSeguro;
+  final int tieneOPD;
 
   const FormPago({
     Key? key,
@@ -21,6 +24,8 @@ class FormPago extends StatefulWidget {
     required this.selectedYear,
     required this.selectedBimestre,
     required this.oid,
+    required this.tieneOPD,
+    required this.tieneSeguro,
   }) : super(key: key);
 
   @override
@@ -39,6 +44,7 @@ class FormPagoState extends State<FormPago> {
   final int idPago = 21;
   int? oid;
   String emisorRaw = '';
+  String razonSocialInfo = '';
   String? reciboId;
   String? reciboResponse;
   Uint8List? pdfBytes;
@@ -66,11 +72,11 @@ class FormPagoState extends State<FormPago> {
         }
       }
 
+      razonSocialInfo = dataMap['razonSocial'] ?? '';
       emisorRaw = dataMap['emisor']?.split('/').last ?? '';
       final String fechaTransaccionRaw = dataMap['fechaTransaccion'] ?? '';
       final String horaTransaccionRaw = dataMap['horaTransaccion'] ?? '';
-      final double montoRaw =
-          double.tryParse(dataMap['monto'] ?? '0.00') ?? 0.00;
+      final double? montoRaw = parseDouble(dataMap['monto']);
       referenciaRaw = dataMap['referencia'] ?? '';
       numeroTarjeta = dataMap['tarjeta'] ?? '';
 
@@ -83,18 +89,22 @@ class FormPagoState extends State<FormPago> {
         fechaTransaccionFormatted = 'No se pudo formatear la fecha';
       }
 
-      montoFormatted = montoRaw.toStringAsFixed(2);
+      montoFormatted = montoRaw?.toStringAsFixed(2) ?? '0.00';
 
-      if (emisorRaw.toLowerCase().contains('DEBITO')) {
-        tipoDePago = 18;
-      } else {
-        tipoDePago = 4;
-      }
+      tipoDePago = emisorRaw.toLowerCase().contains('DEBITO') ? 18 : 4;
     } catch (e) {
       logger.e('Error al analizar los datos desde stdoutOutput: $e');
-      setState(() {
-        resultMessage = 'Error al analizar los datos desde stdoutOutput: $e';
-      });
+    }
+  }
+
+  double? parseDouble(String? input) {
+    if (input == null) {
+      return null;
+    }
+    try {
+      return double.tryParse(input);
+    } catch (e) {
+      return null;
     }
   }
 
@@ -147,7 +157,7 @@ class FormPagoState extends State<FormPago> {
       final hmacSha256 = Hmac(sha256, key);
       final digest = hmacSha256.convert(bytes);
       final result = digest.toString();
-      logger.i('Firma HMAC calculada: $result');
+      logger.i('Firma HMAC: $result');
       return result;
     } catch (e) {
       logger.e('Error al calcular la Firma HMAC: $e');
@@ -174,7 +184,9 @@ class FormPagoState extends State<FormPago> {
         "Anio": widget.selectedYear,
         "Bim": widget.selectedBimestre,
         "Cajero": oid,
-        "Bancoemisor": emisorRaw,
+        "TieneSeguro": widget.tieneSeguro,
+        "TieneOPD": widget.tieneOPD,
+        "Bancoemisor": razonSocialInfo,
         "Fecha": fechaTransaccionFormatted,
         "Importe": montoFormatted,
         "Referencia": referenciaRaw,
@@ -221,15 +233,12 @@ class FormPagoState extends State<FormPago> {
             final pdfBytesDelRecibo = await obtenerRecibo(reciboId);
 
             if (pdfBytesDelRecibo != null) {
-              await Printing.sharePdf(
-                bytes: pdfBytesDelRecibo,
-                filename: 'recibo.pdf',
-              );
-              logger.i('Documento enviado a imprimir.');
-            } else {}
+              await imprimirRecibo(pdfBytesDelRecibo);
+            }
           } else {
             setState(() {
-              resultMessage = 'Error en el pago: $detalleRespuesta';
+              resultMessage =
+                  'Error en el pago acude a tu recaudadora para mas detalles';
             });
             logger.e('Error en el pago: $detalleRespuesta');
           }
@@ -246,11 +255,18 @@ class FormPagoState extends State<FormPago> {
           resultMessage =
               'Error en la solicitud HTTP: ${response.reasonPhrase}';
         });
+
+        // Reintento automático después de 5 segundos
+        Timer(const Duration(seconds: 3), () {
+          realizarPago(); // Vuelve a intentar la solicitud
+        });
       }
     } catch (error) {
-      logger.e('Error en la solicitud: $error');
-      setState(() {
-        resultMessage = 'Error en la solicitud: $error';
+      handleError('Error en la solicitud: $error');
+
+      // Reintento automático después de 5 segundos
+      Timer(const Duration(seconds: 3), () {
+        realizarPago(); // Vuelve a intentar la solicitud
       });
     }
   }
@@ -314,14 +330,23 @@ class FormPagoState extends State<FormPago> {
 
   Future<void> imprimirRecibo(Uint8List? pdfBytes) async {
     if (pdfBytes != null) {
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: 'recibo.pdf',
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FormRecibo(pdfBytes: pdfBytes),
+        ),
       );
       logger.i('Documento enviado a imprimir.');
     } else {
       logger.e('No se ha generado un recibo para imprimir.');
     }
+  }
+
+  void handleError(String errorMessage) {
+    logger.e(errorMessage);
+    setState(() {
+      resultMessage = errorMessage;
+    });
   }
 
   @override
