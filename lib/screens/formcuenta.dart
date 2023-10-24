@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:predialexpressapp/main.dart';
 import 'package:predialexpressapp/models/consultacuenta.dart';
 import 'package:predialexpressapp/screens/formadeudos.dart';
 import 'dart:convert';
 import 'dart:async';
+
+Future<void> getVersion() async {
+  PackageInfo packageInfo = await PackageInfo.fromPlatform();
+  String appVersion = packageInfo.version;
+  logger.e("Versión de la aplicación: $appVersion");
+}
 
 Future<Cuenta> consultarCuenta(String cuentaPredial) async {
   final url = Uri.parse('http://10.20.16.181:8000/consulta-cuenta');
@@ -25,7 +32,7 @@ Future<Cuenta> consultarCuenta(String cuentaPredial) async {
           observaciones: jsonResponse['observaciones'],
         );
       } else {
-        throw Exception('El valor de "idConsulta" no es un número válido');
+        throw Exception('El valor de consulta no es un número válido');
       }
     } else {
       throw Exception('Respuesta del servidor con formato incorrecto');
@@ -270,7 +277,7 @@ class _FormCuentaState extends State<FormCuenta> {
             ),
             const SizedBox(height: 70),
             const Text(
-              'o ingresa tu Clave Única del Registro del Territorio (CURT)',
+              'O ingresa tu Clave Única del Registro del Territorio (CURT)',
               textAlign: TextAlign.justify,
               style: TextStyle(
                 color: Colors.black,
@@ -308,6 +315,27 @@ class _FormCuentaState extends State<FormCuenta> {
               child: _isLoading
                   ? const CircularProgressIndicator()
                   : const Text('Consultar'),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.done) {
+                    final appVersion = snapshot.data?.version;
+                    final oidValue = widget.oid.toString();
+                    return Text(
+                      'Versión: $oidValue-$appVersion',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    );
+                  } else {
+                    return const CircularProgressIndicator();
+                  }
+                },
+              ),
             ),
           ],
         ),

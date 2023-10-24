@@ -47,7 +47,7 @@ class FormPagoState extends State<FormPago> {
   String razonSocialInfo = '';
   String? reciboId;
   String? reciboResponse;
-  Uint8List? pdfBytes;
+  List<Uint8List> pdfBytesList = [];
 
   @override
   void initState() {
@@ -216,31 +216,31 @@ class FormPagoState extends State<FormPago> {
         final jsonResponse = jsonDecode(response.body);
 
         if (jsonResponse is List && jsonResponse.isNotEmpty) {
-          final firstResponse = jsonResponse.first;
+          List<Uint8List> pdfBytesList = [];
 
-          final bool pagoAplicado = firstResponse["pagoAplicado"];
-          final String detalleRespuesta = firstResponse["detalle"];
+          for (final receiptResponse in jsonResponse) {
+            final bool pagoAplicado = receiptResponse["pagoAplicado"];
 
-          if (pagoAplicado) {
-            setState(() {
-              resultMessage = 'Pago exitoso';
-              reciboId = firstResponse["recibo"];
-            });
+            final String reciboId = receiptResponse["recibo"];
 
-            logger.i('Pago exitoso');
-            logger.i('reciboId: $reciboId');
+            if (pagoAplicado) {
+              logger.i('Pago exitoso');
+              logger.i('reciboId: $reciboId');
 
-            final pdfBytesDelRecibo = await obtenerRecibo(reciboId);
+              final pdfBytesDelRecibo = await obtenerRecibo(reciboId);
 
-            if (pdfBytesDelRecibo != null) {
-              await imprimirRecibo(pdfBytesDelRecibo);
+              setState(() {
+                resultMessage = 'Pago exitoso';
+              });
+
+              if (pdfBytesDelRecibo != null) {
+                pdfBytesList.add(pdfBytesDelRecibo);
+              }
             }
-          } else {
-            setState(() {
-              resultMessage =
-                  'Error en el pago acude a tu recaudadora para mas detalles';
-            });
-            logger.e('Error en el pago: $detalleRespuesta');
+          }
+
+          if (pdfBytesList.isNotEmpty) {
+            await imprimirRecibos(pdfBytesList);
           }
         } else {
           setState(() {
@@ -271,29 +271,19 @@ class FormPagoState extends State<FormPago> {
     }
   }
 
-  Future<Uint8List?> obtenerRecibo(String? reciboId) async {
-    if (reciboId == null) {
-      return null;
-    }
-
+  Future<Uint8List?> obtenerRecibo(String reciboId) async {
     try {
-      // Realiza la solicitud al servidor y obtiene la respuesta en base64
-      final List<Map<String, dynamic>> reciboRequestList = [
+      final reciboRequestList = [
         {"reciboID": reciboId}
       ];
-
-      // Convierte la lista en una cadena JSON
-      final String reciboRequestBody = jsonEncode(reciboRequestList);
+      final reciboRequestBody = jsonEncode(reciboRequestList);
       const String reciboApiUrl =
           'https://indicadores.zapopan.gob.mx:8080/WSCajaWebPruebas/api/reciboPredialPruebas';
 
-      // Registra un mensaje informativo con el ID del recibo
       logger.i('Iniciando solicitud de recibo con ID: $reciboId');
 
-      // Registra cómo se envían los datos al servidor
       logger.d('Enviando solicitud al servidor: $reciboRequestBody');
 
-      // Realiza la solicitud POST al servidor
       final reciboResponse = await http.post(
         Uri.parse(reciboApiUrl),
         headers: {
@@ -302,44 +292,46 @@ class FormPagoState extends State<FormPago> {
         body: reciboRequestBody,
       );
 
-      // Registra la respuesta recibida del servidor
       logger.d(
           'Respuesta recibida en la solicitud de recibo: ${reciboResponse.body}');
 
       if (reciboResponse.statusCode == 200) {
-        // Decodifica la respuesta en base64 en un Uint8List
-        final Uint8List pdfBytesDelRecibo = base64Decode(reciboResponse.body);
+        final pdfBytesDelRecibo = base64Decode(reciboResponse.body);
 
-        // Registra cómo se recibe y decodifica la respuesta
         logger.d('Respuesta decodificada: $pdfBytesDelRecibo');
 
-        // Retorna el PDF decodificado
         return pdfBytesDelRecibo;
       } else {
-        // Registra un mensaje de error en caso de error HTTP
         logger.e(
             'Error HTTP: ${reciboResponse.statusCode}, ${reciboResponse.reasonPhrase}');
-        return null; // Devuelve nulo en caso de error HTTP
+        return null;
       }
     } catch (error) {
-      // Registra un mensaje de error en caso de excepción
       logger.e('Error en la solicitud: $error');
-      return null; // Devuelve nulo en caso de error
+      return null;
     }
   }
 
-  Future<void> imprimirRecibo(Uint8List? pdfBytes) async {
-    if (pdfBytes != null) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FormRecibo(pdfBytes: pdfBytes),
-        ),
-      );
-      logger.i('Documento enviado a imprimir.');
-    } else {
-      logger.e('No se ha generado un recibo para imprimir.');
+  Future<void> imprimirRecibos(List<Uint8List> pdfBytesList) async {
+    if (pdfBytesList.isEmpty) {
+      handleError('No se encontraron recibos para mostrar.');
+      return;
     }
+
+    Uint8List combinedPdfBytes = Uint8List(0);
+
+    for (final pdfBytes in pdfBytesList) {
+      combinedPdfBytes = Uint8List.fromList([...combinedPdfBytes, ...pdfBytes]);
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FormRecibo(pdfBytesList: pdfBytesList),
+      ),
+    );
+
+    logger.i('Documentos enviados a la siguiente vista.');
   }
 
   void handleError(String errorMessage) {
@@ -352,52 +344,73 @@ class FormPagoState extends State<FormPago> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 300,
-              height: 300,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  LoadingIndicator(
-                    indicatorType: Indicator.ballSpinFadeLoader,
-                    colors: [
-                      Color(0xFFFD7174),
-                      Color(0xFFD60D80),
-                      Color(0xFFEF7D00),
-                      Color(0xFF7B8288),
-                      Color(0xFFE8E8E8),
-                      Color(0xFF46BABA),
-                      Color(0xFF00A3D2),
-                      Color(0xFF70B33B),
-                    ],
-                    strokeWidth: 2,
-                    backgroundColor: Colors.white,
-                    pathBackgroundColor: Colors.white,
-                  ),
-                ],
-              ),
+      body: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 10,
+            child: Image.asset(
+              'assets/images/EscudoSlogan.png',
+              width: 400,
+              height: 200,
             ),
-            const SizedBox(height: 40),
-            if (resultMessage.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  resultMessage,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    color: Colors.black,
-                    fontFamily: 'Isidora-regular',
-                    fontWeight: FontWeight.bold,
+          ),
+          Positioned(
+            top: 20,
+            right: 10,
+            child: Image.asset(
+              'assets/images/logo_ingresos.png',
+              width: 300,
+              height: 150,
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 300,
+                  height: 300,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      LoadingIndicator(
+                        indicatorType: Indicator.ballSpinFadeLoader,
+                        colors: [
+                          Color(0xFFFD7174),
+                          Color(0xFFD60D80),
+                          Color(0xFFEF7D00),
+                          Color(0xFF7B8288),
+                          Color(0xFFE8E8E8),
+                          Color(0xFF46BABA),
+                          Color(0xFF00A3D2),
+                          Color(0xFF70B33B),
+                        ],
+                        strokeWidth: 2,
+                        backgroundColor: Colors.transparent,
+                        pathBackgroundColor: Colors.transparent,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-          ],
-        ),
+                const SizedBox(height: 40),
+                if (resultMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      resultMessage,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        color: Colors.black,
+                        fontFamily: 'Isidora-regular',
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

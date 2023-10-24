@@ -4,37 +4,39 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'dart:typed_data';
 
 class FormRecibo extends StatelessWidget {
-  final Uint8List pdfBytes;
+  final List<Uint8List> pdfBytesList;
 
-  const FormRecibo({super.key, required this.pdfBytes});
+  const FormRecibo({Key? key, required this.pdfBytesList}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const ClipShape(),
-            const Align(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
+        body: ListView(
+      children: [
+        const ClipShape(),
+        for (int i = 0; i < pdfBytesList.length; i++)
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
                 child: Text(
-                  '',
-                  style: TextStyle(
-                    fontSize: 24,
+                  'Recibo generado #${i + 1}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.black,
                     fontFamily: 'Isidora-regular',
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ),
-            SizedBox(
-              width: 1000,
-              height: 800,
-              child: SfPdfViewer.memory(pdfBytes),
-            ),
-          ],
-        ),
-      ),
-    );
+              SizedBox(
+                width: 1000,
+                height: 800,
+                child: SfPdfViewer.memory(pdfBytesList[i]),
+              ),
+            ],
+          ),
+      ],
+    ));
   }
 }

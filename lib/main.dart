@@ -63,7 +63,7 @@ class MyApp extends StatelessWidget {
               } else {
                 return const MyErrorWidget(
                   errorMessage:
-                      'No se encuentra el archivo de cajero en la ubicación correcta, contacta a soporte tecnico.',
+                      'No se encuentra el archivo de cajero en la ubicación correcta, contacta a soporte técnico.',
                 );
               }
             } else {
