@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:predialexpressapp/screens/formrecibo.dart';
+import 'package:flutter/services.dart';
 
 class FormPago extends StatefulWidget {
   final String stdoutOutput;
@@ -244,7 +244,8 @@ class FormPagoState extends State<FormPago> {
           }
         } else {
           setState(() {
-            resultMessage = 'Respuesta no válida del servidor';
+            resultMessage =
+                'Respuesta no válida: Acude a tu recaudadora más cercana';
           });
           logger.e('Respuesta no válida del servidor');
         }
@@ -253,20 +254,18 @@ class FormPagoState extends State<FormPago> {
             .e('Error HTTP: ${response.statusCode}, ${response.reasonPhrase}');
         setState(() {
           resultMessage =
-              'Error en la solicitud HTTP: ${response.reasonPhrase}';
+              'Error en la solicitud: Acude a tu recaudadora más cercana';
         });
 
-        // Reintento automático después de 5 segundos
         Timer(const Duration(seconds: 3), () {
-          realizarPago(); // Vuelve a intentar la solicitud
+          realizarPago();
         });
       }
     } catch (error) {
       handleError('Error en la solicitud: $error');
 
-      // Reintento automático después de 5 segundos
       Timer(const Duration(seconds: 3), () {
-        realizarPago(); // Vuelve a intentar la solicitud
+        realizarPago();
       });
     }
   }
@@ -293,12 +292,12 @@ class FormPagoState extends State<FormPago> {
       );
 
       logger.d(
-          'Respuesta recibida en la solicitud de recibo: ${reciboResponse.body}');
+          'Respuesta recibida en la solicitud de recibo: ${reciboResponse.statusCode}');
 
       if (reciboResponse.statusCode == 200) {
         final pdfBytesDelRecibo = base64Decode(reciboResponse.body);
 
-        logger.d('Respuesta decodificada: $pdfBytesDelRecibo');
+        logger.d('Respuesta decodificada: OK');
 
         return pdfBytesDelRecibo;
       } else {
@@ -310,6 +309,13 @@ class FormPagoState extends State<FormPago> {
       logger.e('Error en la solicitud: $error');
       return null;
     }
+  }
+
+  void handleError(String errorMessage) {
+    logger.e(errorMessage);
+    setState(() {
+      resultMessage = errorMessage;
+    });
   }
 
   Future<void> imprimirRecibos(List<Uint8List> pdfBytesList) async {
@@ -327,18 +333,12 @@ class FormPagoState extends State<FormPago> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FormRecibo(pdfBytesList: pdfBytesList),
+        builder: (context) =>
+            FormRecibo(pdfBytesList: pdfBytesList, oid: widget.oid),
       ),
     );
 
     logger.i('Documentos enviados a la siguiente vista.');
-  }
-
-  void handleError(String errorMessage) {
-    logger.e(errorMessage);
-    setState(() {
-      resultMessage = errorMessage;
-    });
   }
 
   @override
