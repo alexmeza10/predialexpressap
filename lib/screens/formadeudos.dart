@@ -117,36 +117,37 @@ class FormAdeudosState extends State<FormAdeudos> {
               logger.d('Valor de year: $year');
               logger.d('Valor de bimestre: $bimestre');
 
-              // Verifica si los valores de year y bimestre son válidos
               if (year != null && bimestre != null) {
                 jsonYear = int.parse(year!);
                 jsonBimestre = int.parse(bimestre!);
 
-                // Establece las casillas seleccionadas automáticamente
-                selectedAdeudos = List<bool>.generate(adeudos.length, (index) {
+                selectedAdeudos =
+                    List<bool>.generate(adeudos.length, (index) => true);
+                for (int index = 0; index < adeudos.length; index++) {
                   final adeudo = adeudos[index];
                   final adeudoYear = int.parse(adeudo.anio);
                   final adeudoBimestre = int.parse(adeudo.bim);
 
-                  // Verifica si el adeudo es anterior o igual a jsonYear y jsonBimestre
                   final shouldBeSelected = adeudoYear < jsonYear! ||
                       (adeudoYear == jsonYear &&
                           adeudoBimestre <= jsonBimestre!);
 
-                  // Establece que el adeudo debe estar seleccionado
                   if (shouldBeSelected) {
-                    return true;
+                    selectedAdeudos[index] = true;
                   } else {
-                    // Verifica si el adeudo es igual a jsonYear y jsonBimestre, si lo es, bloquea la selección
-                    return adeudoYear == jsonYear &&
+                    selectedAdeudos[index] = adeudoYear == jsonYear &&
                         adeudoBimestre == jsonBimestre;
                   }
-                });
+                }
 
                 logger.d(
                     'selectedAdeudos (en _consultarAdeudos): $selectedAdeudos');
               }
             }
+
+            selectedAdeudos =
+                List<bool>.generate(adeudos.length, (index) => true);
+            _updateTotalSeleccionado();
           }
         });
 
@@ -500,13 +501,11 @@ class FormAdeudosState extends State<FormAdeudos> {
                                 if (newSelectedYear < jsonYear ||
                                     (newSelectedYear == jsonYear &&
                                         newSelectedBimestre <= jsonBimestre)) {
-                                  // Impide que los adeudos con el mismo año y bimestre se desmarquen
                                   setState(() {
                                     selectedAdeudos[index] = true;
                                     _updateTotalSeleccionado();
                                   });
                                 } else {
-                                  // Permite seleccionar otros adeudos
                                   setState(() {
                                     selectedAdeudos[index] = isSelected;
                                     _updateTotalSeleccionado();

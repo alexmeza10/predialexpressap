@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_indicator/loading_indicator.dart';
@@ -39,6 +40,8 @@ class FormPagoState extends State<FormPago> {
   String fechaTransaccionFormatted = '';
   String montoFormatted = '';
   String referenciaRaw = '';
+  String autorizacionRaw = '';
+  String afiliacion = '';
   int tipoDePago = 4;
   String numeroTarjeta = '';
   final int idPago = 21;
@@ -78,6 +81,7 @@ class FormPagoState extends State<FormPago> {
       final String horaTransaccionRaw = dataMap['horaTransaccion'] ?? '';
       final double? montoRaw = parseDouble(dataMap['monto']);
       referenciaRaw = dataMap['referencia'] ?? '';
+      autorizacionRaw = dataMap['autorizacion'] ?? '';
       numeroTarjeta = dataMap['tarjeta'] ?? '';
 
       if (fechaTransaccionRaw.isNotEmpty && horaTransaccionRaw.isNotEmpty) {
@@ -91,7 +95,10 @@ class FormPagoState extends State<FormPago> {
 
       montoFormatted = montoRaw?.toStringAsFixed(2) ?? '0.00';
 
-      tipoDePago = emisorRaw.toLowerCase().contains('DEBITO') ? 18 : 4;
+      final emisorTipo = emisorRaw.contains('DEBITO') ? 'DEBITO' : 'CREDITO';
+
+      tipoDePago = emisorTipo == 'DEBITO' ? 18 : 4;
+      logger.d('Tipo De Pago: $tipoDePago');
     } catch (e) {
       logger.e('Error al analizar los datos desde stdoutOutput: $e');
     }
@@ -165,6 +172,31 @@ class FormPagoState extends State<FormPago> {
     }
   }
 
+  Future<String> obtenerAfiliacion() async {
+    try {
+      final archivo = File('C:/oid.txt');
+
+      if (await archivo.exists()) {
+        final contenido = await archivo.readAsString();
+        final partes = contenido.split('-');
+        if (partes.length > 2) {
+          final afiliacion = partes[2];
+          logger.d('Afiliación: $afiliacion');
+          return afiliacion;
+        } else {
+          logger.e('El contenido del archivo no contiene la afiliación.');
+          return '';
+        }
+      } else {
+        logger.e('El archivo no existe en la ubicación especificada.');
+        return '';
+      }
+    } catch (e) {
+      logger.e('Error al leer el archivo: $e');
+      return '';
+    }
+  }
+
   Future<void> realizarPago() async {
     try {
       logger.i('Iniciando realizarPago');
@@ -174,28 +206,32 @@ class FormPagoState extends State<FormPago> {
         widget.selectedYear.toString(),
         widget.selectedBimestre.toString(),
         montoFormatted,
-        referenciaRaw,
+        '$referenciaRaw/$autorizacionRaw',
         numeroTarjeta.toString(),
       );
+
+      final afiliacion = await obtenerAfiliacion();
 
       final Map<String, dynamic> requestData = {
         "id": idPago,
         "Consulta": widget.idConsulta.toString(),
         "Anio": widget.selectedYear,
         "Bim": widget.selectedBimestre,
-        "Cajero": oid,
+        "Cajero": '$oid/$afiliacion',
         "TieneSeguro": widget.tieneSeguro,
         "TieneOPD": widget.tieneOPD,
         "Bancoemisor": razonSocialInfo,
         "Fecha": fechaTransaccionFormatted,
         "Importe": montoFormatted,
-        "Referencia": referenciaRaw,
+        "Referencia": '$referenciaRaw/$autorizacionRaw',
         "Tipodepago": tipoDePago,
         "Tarjeta": numeroTarjeta,
         "vacceso": vacceso,
       };
 
       final String requestBody = jsonEncode(requestData);
+
+      logger.i('referencia: $referenciaRaw/$autorizacionRaw');
 
       logger.i('Datos enviados en la solicitud: $requestData');
 
@@ -216,11 +252,8 @@ class FormPagoState extends State<FormPago> {
         final jsonResponse = jsonDecode(response.body);
 
         if (jsonResponse is List && jsonResponse.isNotEmpty) {
-          List<Uint8List> pdfBytesList = [];
-
           for (final receiptResponse in jsonResponse) {
             final bool pagoAplicado = receiptResponse["pagoAplicado"];
-
             final String reciboId = receiptResponse["recibo"];
 
             if (pagoAplicado) {
@@ -252,10 +285,6 @@ class FormPagoState extends State<FormPago> {
       } else {
         logger
             .e('Error HTTP: ${response.statusCode}, ${response.reasonPhrase}');
-        setState(() {
-          resultMessage =
-              'Error en la solicitud: Acude a tu recaudadora más cercana';
-        });
 
         Timer(const Duration(seconds: 3), () {
           realizarPago();
@@ -280,8 +309,11 @@ class FormPagoState extends State<FormPago> {
           'https://indicadores.zapopan.gob.mx:8080/WSCajaWebPruebas/api/reciboPredialPruebas';
 
       logger.i('Iniciando solicitud de recibo con ID: $reciboId');
-
       logger.d('Enviando solicitud al servidor: $reciboRequestBody');
+
+      setState(() {
+        resultMessage = 'Generando recibo...';
+      });
 
       final reciboResponse = await http.post(
         Uri.parse(reciboApiUrl),
@@ -298,7 +330,6 @@ class FormPagoState extends State<FormPago> {
         final pdfBytesDelRecibo = base64Decode(reciboResponse.body);
 
         logger.d('Respuesta decodificada: OK');
-
         return pdfBytesDelRecibo;
       } else {
         logger.e(
@@ -320,7 +351,7 @@ class FormPagoState extends State<FormPago> {
 
   Future<void> imprimirRecibos(List<Uint8List> pdfBytesList) async {
     if (pdfBytesList.isEmpty) {
-      handleError('No se encontraron recibos para mostrar.');
+      handleError('No se genero recibo para mostrar');
       return;
     }
 

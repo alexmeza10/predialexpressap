@@ -23,17 +23,16 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         body: FutureBuilder<int>(
-          future: cajero(),
+          future: cajero(), // Obtener el valor de oid
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.done) {
               if (snapshot.hasError) {
-                return MyErrorWidget(
-                  errorMessage:
-                      'Error al obtener el valor de OID: ${snapshot.error}',
+                return const MyErrorWidget(
+                  errorMessage: 'Error al obtener el cajero',
                 );
               }
 
-              final int oid = snapshot.data ?? 0;
+              final int oid = snapshot.data ?? 0; // Asignar el valor de oid
 
               if (oid != 0) {
                 return FutureBuilder<String>(
@@ -41,9 +40,9 @@ class MyApp extends StatelessWidget {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.done) {
                       if (snapshot.hasError) {
-                        return MyErrorWidget(
+                        return const MyErrorWidget(
                           errorMessage:
-                              'Error al verificar el corte: ${snapshot.error}',
+                              'Error al verificar el corte, verifica el cajero en SIR',
                         );
                       }
 
@@ -107,12 +106,19 @@ Future<int> cajero() async {
 
     if (await archivo.exists()) {
       final contenido = await archivo.readAsString();
-      if (esNumero(contenido)) {
-        int oid = int.parse(contenido);
-        logger.d('oid: $oid');
-        return oid;
+      final partes = contenido.split('-');
+      if (partes.isNotEmpty) {
+        final parteAntesDelGuion = partes.first;
+        if (parteAntesDelGuion.isNotEmpty && esNumero(parteAntesDelGuion)) {
+          int oid = int.parse(parteAntesDelGuion);
+          logger.d('oid: $oid');
+          return oid;
+        } else {
+          logger.e('El contenido del archivo no es válido.');
+          return 0;
+        }
       } else {
-        logger.e('El contenido del archivo no es un número válido.');
+        logger.e('El contenido del archivo no contiene un guion.');
         return 0;
       }
     } else {
@@ -150,12 +156,14 @@ Future<String> verificarCorte(int oid) async {
       logger.i('Respuesta de la API: ${jsonResponse['message']}');
       return jsonResponse['message'];
     } else {
-      throw Exception(
-          'Fallo en la solicitud de la API: ${response.reasonPhrase}');
+      return 'No se pudo verificar el corte en este momento. Por favor, cierra el corte de este cajero';
     }
   } catch (e) {
-    logger.e('Error en verificarCorte: $e');
-    return 'Error: $e';
+    if (e is SocketException) {
+      return 'Hubo un problema de conexión. Por favor, verifica tu red y vuelve a intentarlo.';
+    } else {
+      return 'Se produjo un error al verificar el corte. Por favor, contacta a soporte ';
+    }
   }
 }
 

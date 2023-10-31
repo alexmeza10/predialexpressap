@@ -206,18 +206,44 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
     });
   }
 
+  Future<String> obtenerCajero() async {
+    try {
+      final archivo = File('C:/oid.txt');
+
+      if (await archivo.exists()) {
+        final contenido = await archivo.readAsString();
+        final partes = contenido.split('-');
+        if (partes.length > 1) {
+          final obtenerCajero = partes[1];
+          logger.d('Cajero: $obtenerCajero');
+          return obtenerCajero;
+        } else {
+          logger.e('El contenido del archivo no contiene un guion.');
+          return '';
+        }
+      } else {
+        logger.e('El archivo no existe en la ubicación especificada.');
+        return '';
+      }
+    } catch (e) {
+      logger.e('Error al leer el archivo: $e');
+      return '';
+    }
+  }
+
   Future<void> _callExecutable() async {
     const executablePath = r'C:\flap\ConsolePinpad.exe';
     final formattedTotal = totalAPagar.toStringAsFixed(2);
     final now = DateTime.now();
     final formattedDate = DateFormat('yyyy-MM-dd-HH:mm:ss').format(now);
     final reference = 'Referencia_$formattedDate';
+    final secuencia = await obtenerCajero();
 
     final requestData = {
       "Servicio": "22",
       "Sucursal": "1035",
       "Importe": formattedTotal,
-      "Secuencia": "UserName",
+      "Secuencia": secuencia,
       "Referencia": reference,
       "TipodeTarjeta": selectedCardOption,
       "MesesSinIntereses": "0",
