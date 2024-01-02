@@ -96,7 +96,7 @@ class FormAdeudosState extends State<FormAdeudos> {
   Future<void> _consultarAdeudos() async {
     try {
       final response = await http.post(Uri.parse(
-          'http://10.20.16.181:8000/obtener-adeudo?idConsulta=${widget.idConsulta}'));
+          'https://kioscos.zapopan.gob.mx/APIpredialExpress/public/obtener-adeudo?idConsulta=${widget.idConsulta}'));
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);

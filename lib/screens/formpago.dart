@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
+import 'package:predialexpressapp/screens/formcuenta.dart';
 import 'package:predialexpressapp/screens/formrecibo.dart';
 import 'package:flutter/services.dart';
 
@@ -51,6 +52,8 @@ class FormPagoState extends State<FormPago> {
   String? reciboId;
   String? reciboResponse;
   List<Uint8List> pdfBytesList = [];
+  int maxAttempts = 4;
+  int currentAttempt = 0;
 
   @override
   void initState() {
@@ -198,6 +201,12 @@ class FormPagoState extends State<FormPago> {
   }
 
   Future<void> realizarPago() async {
+    if (currentAttempt >= maxAttempts) {
+      return;
+    }
+
+    currentAttempt++;
+
     try {
       logger.i('Iniciando realizarPago');
       final String vacceso = calcularFirmaHMAC(
@@ -231,8 +240,6 @@ class FormPagoState extends State<FormPago> {
 
       final String requestBody = jsonEncode(requestData);
 
-      logger.i('referencia: $referenciaRaw/$autorizacionRaw');
-
       logger.i('Datos enviados en la solicitud: $requestData');
 
       const String apiUrl =
@@ -258,40 +265,39 @@ class FormPagoState extends State<FormPago> {
 
             if (pagoAplicado) {
               logger.i('Pago exitoso');
-              logger.i('reciboId: $reciboId');
 
-              final pdfBytesDelRecibo = await obtenerRecibo(reciboId);
-
-              setState(() {
-                resultMessage = 'Pago exitoso';
-              });
+              final pdfBytesDelRecibo = await obtenerRecibo(reciboId, oid!);
 
               if (pdfBytesDelRecibo != null) {
-                pdfBytesList.add(pdfBytesDelRecibo);
+                setState(() {
+                  resultMessage = 'Pago exitoso';
+                  pdfBytesList.add(pdfBytesDelRecibo);
+                });
               }
             }
           }
 
           if (pdfBytesList.isNotEmpty) {
             await imprimirRecibos(pdfBytesList);
+          } else {
+            handleError('No se generó recibo para mostrar');
           }
         } else {
-          setState(() {
-            resultMessage =
-                'Respuesta no válida: Acude a tu recaudadora más cercana';
-          });
+          handleError(
+              'Respuesta no válida, Acude a tu recaudadora más cercana');
           logger.e('Respuesta no válida del servidor');
         }
       } else {
+        handleError(
+            'Error HTTP: ${response.statusCode}, ${response.reasonPhrase}');
         logger
             .e('Error HTTP: ${response.statusCode}, ${response.reasonPhrase}');
-
         Timer(const Duration(seconds: 3), () {
           realizarPago();
         });
       }
     } catch (error) {
-      handleError('Error en la solicitud: $error');
+      handleError('No se pudo procesar el pago');
 
       Timer(const Duration(seconds: 3), () {
         realizarPago();
@@ -299,14 +305,14 @@ class FormPagoState extends State<FormPago> {
     }
   }
 
-  Future<Uint8List?> obtenerRecibo(String reciboId) async {
+  Future<Uint8List?> obtenerRecibo(String reciboId, int oid) async {
     try {
       final reciboRequestList = [
         {"reciboID": reciboId}
       ];
       final reciboRequestBody = jsonEncode(reciboRequestList);
       const String reciboApiUrl =
-          'https://indicadores.zapopan.gob.mx:8080/WSCajaWebPruebas/api/reciboPredialPruebas';
+          'https://indicadores.zapopan.gob.mx:8080/WSCajaWeb/api/reciboPredialWeb';
 
       logger.i('Iniciando solicitud de recibo con ID: $reciboId');
       logger.d('Enviando solicitud al servidor: $reciboRequestBody');
@@ -328,38 +334,43 @@ class FormPagoState extends State<FormPago> {
 
       if (reciboResponse.statusCode == 200) {
         final pdfBytesDelRecibo = base64Decode(reciboResponse.body);
-
-        logger.d('Respuesta decodificada: OK');
         return pdfBytesDelRecibo;
       } else {
         logger.e(
             'Error HTTP: ${reciboResponse.statusCode}, ${reciboResponse.reasonPhrase}');
+
+        Timer(const Duration(seconds: 10), () {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+            builder: (context) => FormCuenta(oid: oid),
+          ));
+        });
+
         return null;
       }
     } catch (error) {
-      logger.e('Error en la solicitud: $error');
+      logger.e('No se pudo generar el recibo');
+
+      Timer(const Duration(seconds: 10), () {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (context) => FormCuenta(oid: oid),
+        ));
+      });
+
       return null;
     }
   }
 
-  void handleError(String errorMessage) {
-    logger.e(errorMessage);
-    setState(() {
-      resultMessage = errorMessage;
-    });
-  }
-
   Future<void> imprimirRecibos(List<Uint8List> pdfBytesList) async {
     if (pdfBytesList.isEmpty) {
-      handleError('No se genero recibo para mostrar');
+      setState(() {
+        resultMessage = 'No se generó ningún recibo para mostrar';
+      });
       return;
     }
 
-    Uint8List combinedPdfBytes = Uint8List(0);
-
-    for (final pdfBytes in pdfBytesList) {
-      combinedPdfBytes = Uint8List.fromList([...combinedPdfBytes, ...pdfBytes]);
-    }
+    setState(() {
+      resultMessage = 'Generando recibo';
+    });
 
     await Navigator.push(
       context,
@@ -368,8 +379,46 @@ class FormPagoState extends State<FormPago> {
             FormRecibo(pdfBytesList: pdfBytesList, oid: widget.oid),
       ),
     );
-
     logger.i('Documentos enviados a la siguiente vista.');
+  }
+
+  void handleError(String errorMessage) {
+    logger.e(errorMessage);
+    mostrarErrorDialog(context, errorMessage, widget.oid);
+  }
+
+  void mostrarErrorDialog(BuildContext context, String errorMessage, int oid) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(errorMessage),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                  builder: (context) => FormCuenta(oid: oid),
+                ));
+              },
+              style: ButtonStyle(
+                backgroundColor:
+                    MaterialStateProperty.all<Color>(const Color(0xFF764E84)),
+                foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+              ),
+              child: const Text(
+                'Aceptar',
+                style: TextStyle(
+                  fontFamily: 'Isidora-regular',
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override

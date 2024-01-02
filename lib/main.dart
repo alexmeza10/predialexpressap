@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         body: FutureBuilder<int>(
-          future: cajero(), // Obtener el valor de oid
+          future: cajero(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.done) {
               if (snapshot.hasError) {
@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
                 );
               }
 
-              final int oid = snapshot.data ?? 0; // Asignar el valor de oid
+              final int oid = snapshot.data ?? 0;
 
               if (oid != 0) {
                 return FutureBuilder<String>(
@@ -143,7 +143,8 @@ bool esNumero(String contenido) {
 Future<String> verificarCorte(int oid) async {
   try {
     final cajero = oid;
-    final url = Uri.parse('http://10.20.16.181:8000/verificar-corte');
+    final url = Uri.parse(
+        'https://kioscos.zapopan.gob.mx/APIpredialExpress/public/verificar-corte');
     final response = await http.post(
       url,
       body: {

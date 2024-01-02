@@ -231,6 +231,32 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
     }
   }
 
+  Future<String> obtenerSucursal() async {
+    try {
+      final archivo = File('C:/oid.txt');
+
+      if (await archivo.exists()) {
+        final contenido = await archivo.readAsString();
+        final partes = contenido.split('-');
+        if (partes.length > 3) {
+          final obtenerSucursal = partes[3];
+          logger.d('Sucursal: $obtenerSucursal');
+          return obtenerSucursal;
+        } else {
+          logger.e(
+              'El contenido del archivo no contiene al menos cuatro guiones.');
+          return '';
+        }
+      } else {
+        logger.e('El archivo no existe en la ubicación especificada.');
+        return '';
+      }
+    } catch (e) {
+      logger.e('Error al leer el archivo: $e');
+      return '';
+    }
+  }
+
   Future<void> _callExecutable() async {
     const executablePath = r'C:\flap\ConsolePinpad.exe';
     final formattedTotal = totalAPagar.toStringAsFixed(2);
@@ -238,10 +264,11 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
     final formattedDate = DateFormat('yyyy-MM-dd-HH:mm:ss').format(now);
     final reference = 'Referencia_$formattedDate';
     final secuencia = await obtenerCajero();
+    final sucursal = await obtenerSucursal();
 
     final requestData = {
       "Servicio": "22",
-      "Sucursal": "1035",
+      "Sucursal": sucursal,
       "Importe": formattedTotal,
       "Secuencia": secuencia,
       "Referencia": reference,

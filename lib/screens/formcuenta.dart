@@ -16,7 +16,8 @@ Future<void> getVersion() async {
 }
 
 Future<Cuenta> consultarCuenta(String cuentaPredial) async {
-  final url = Uri.parse('http://10.20.16.181:8000/consulta-cuenta');
+  final url = Uri.parse(
+      'https://kioscos.zapopan.gob.mx/APIpredialExpress/public/consulta-cuenta');
   final response = await http.post(url, body: {'cuentaPredial': cuentaPredial});
 
   if (response.statusCode == 200) {
@@ -45,7 +46,8 @@ Future<Cuenta> consultarCuenta(String cuentaPredial) async {
 }
 
 Future<Cuenta> consultarCurt(String curt) async {
-  final url = Uri.parse('http://10.20.16.181:8000/consulta-curt');
+  final url = Uri.parse(
+      'https://kioscos.zapopan.gob.mx/APIpredialExpress/public/consulta-curt');
   final response = await http.post(url, body: {'curt': curt});
 
   if (response.statusCode == 200) {
