@@ -312,7 +312,7 @@ class FormPagoState extends State<FormPago> {
       ];
       final reciboRequestBody = jsonEncode(reciboRequestList);
       const String reciboApiUrl =
-          'https://indicadores.zapopan.gob.mx:8080/WSCajaWeb/api/reciboPredialWeb';
+          'https://indicadores.zapopan.gob.mx:443/WSCajaWeb/api/reciboPredialWeb';
 
       logger.i('Iniciando solicitud de recibo con ID: $reciboId');
       logger.d('Enviando solicitud al servidor: $reciboRequestBody');
