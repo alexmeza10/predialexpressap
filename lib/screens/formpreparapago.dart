@@ -701,6 +701,28 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                       ),
                                     ],
                                   ),
+                                  /*
+                                  Row(
+                                    children: [
+                                      Radio<int>(
+                                        activeColor: const Color.fromRGBO(
+                                            149, 111, 168, 1),
+                                        value: 3,
+                                        groupValue: selectedCardOption,
+                                        onChanged: (int? value) {
+                                          setState(() {
+                                            selectedCardOption = value!;
+                                          });
+                                        },
+                                      ),
+                                      Image.asset(
+                                        'assets/icon/american-express.png',
+                                        width: 60,
+                                        height: 60,
+                                      ),
+                                    ],
+                                  ),
+                                  */
                                 ],
                               ),
                             ],
@@ -961,7 +983,10 @@ class FormPreparaPagoState extends State<FormPreparaPago> {
                                         if (selectedPaymentOption == 0) {
                                           _showPaymentErrorDialog();
                                         } else if (selectedCardOption == 1 ||
-                                            selectedCardOption == 2) {
+                                                selectedCardOption ==
+                                                    2 /* ||
+                                            selectedCardOption == 3*/
+                                            ) {
                                           setState(() {
                                             isLoading = true;
                                           });

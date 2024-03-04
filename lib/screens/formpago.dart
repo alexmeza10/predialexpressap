@@ -429,8 +429,8 @@ class FormPagoState extends State<FormPago> {
           Positioned(
             top: 0,
             left: 10,
-            child: Image.asset(
-              'assets/images/EscudoSlogan.png',
+            child: Image.network(
+              'https://servicios.zapopan.gob.mx:8000/wwwportal/publicfiles/inline-images/escudo202124%5B1%5D.png',
               width: 400,
               height: 200,
             ),
@@ -457,14 +457,7 @@ class FormPagoState extends State<FormPago> {
                       LoadingIndicator(
                         indicatorType: Indicator.ballSpinFadeLoader,
                         colors: [
-                          Color(0xFFFD7174),
-                          Color(0xFFD60D80),
-                          Color(0xFFEF7D00),
                           Color(0xFF7B8288),
-                          Color(0xFFE8E8E8),
-                          Color(0xFF46BABA),
-                          Color(0xFF00A3D2),
-                          Color(0xFF70B33B),
                         ],
                         strokeWidth: 2,
                         backgroundColor: Colors.transparent,

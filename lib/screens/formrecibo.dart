@@ -28,7 +28,7 @@ class FormReciboState extends State<FormRecibo> {
     super.initState();
     generarArchivoTemporal();
 
-    Future.delayed(const Duration(seconds: 80), () {
+    Future.delayed(const Duration(seconds: 40), () {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (context) => FormCuenta(oid: widget.oid),
       ));

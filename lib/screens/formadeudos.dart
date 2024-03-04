@@ -164,6 +164,25 @@ class FormAdeudosState extends State<FormAdeudos> {
   }
 
   void _updateTotalSeleccionado() {
+    int lastIndex = -1;
+    for (int i = selectedAdeudos.length - 1; i >= 0; i--) {
+      if (selectedAdeudos[i]) {
+        lastIndex = i;
+        break;
+      }
+    }
+    if (lastIndex != -1) {
+      for (int i = lastIndex + 1; i < selectedAdeudos.length; i++) {
+        selectedAdeudos[i] = false;
+      }
+      for (int i = 0; i <= lastIndex; i++) {
+        selectedAdeudos[i] = true;
+      }
+    }
+    _calculateTotalAndUpdateSelected();
+  }
+
+  void _calculateTotalAndUpdateSelected() {
     final List<Adeudo> selectedAdeudosData = adeudos.where((adeudo) {
       final int index = adeudos.indexOf(adeudo);
       return selectedAdeudos.isNotEmpty &&

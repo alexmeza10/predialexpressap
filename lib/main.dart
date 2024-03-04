@@ -253,24 +253,14 @@ class ClipShape extends StatelessWidget {
                 opacity: 0.5,
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: Image.asset(
-                    'assets/images/Escudo_2021-2024.png',
-                    height: MediaQuery.of(context).size.height / 9,
+                  child: Image.network(
+                    'https://servicios.zapopan.gob.mx:8000/wwwportal/publicfiles/inline-images/escudo202124%5B1%5D.png',
+                    height: MediaQuery.of(context).size.height / 10,
                     color: const Color(0xffffffff),
                   ),
                 ),
               ),
               const SizedBox(width: 20),
-              /* // Espacio entre la imagen y el texto
-            const Text(
-              'Predial Express', // Texto a agregar
-              style: TextStyle(
-                color: Colors.white70,
-                fontFamily: 'Isidora-regular',
-                fontSize: 26, // Tamaño del texto
-              ),
-            ),
-            */
             ],
           ),
         ),
